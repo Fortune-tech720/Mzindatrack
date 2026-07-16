@@ -29,8 +29,9 @@ jobs:
         path: |
           ~/.buildozer
           ~/.cache/pip
-        key: buildozer-${{ runner.os }}-py3.11-${{ hashFiles('buildozer.spec') }}-v5
+        key: buildozer-${{ runner.os }}-py3.11-${{ hashFiles('buildozer.spec') }}-v6
         restore-keys: |
+          buildozer-${{ runner.os }}-v5-
           buildozer-${{ runner.os }}-v4-
 
     - name: Measure disk space
@@ -166,7 +167,9 @@ jobs:
         rm -rf ~/.buildozer/android/platform/python-for-android/.buildozer || true
         rm -rf ~/.buildozer/android/platform/python-for-android/dist || true
         rm -rf ~/.buildozer/android/platform/python-for-android/build || true
+        rm -rf ~/.buildozer/android/platform/python-for-android/crystax_ndk || true
         rm -rf ~/.cache/pip/http* || true
+        rm -rf ~/.cache/pip/json-* || true
         echo "✅ Cache cleared"
         
         echo "🧹 Clearing intermediate build artifacts..."
