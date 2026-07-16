@@ -9,9 +9,10 @@ source.exclude_exts = spec,md,yml,yaml
 source.exclude_dirs = tests, bin, __pycache__, .git, .github, .buildozer
 version = 1.0.0
 
-# Updated dependencies for Python 3.14 compatibility
-# Cython 3.0.11 includes Python 3.14 fixes for _PyLong_AsByteArray API
-requirements = python3,Cython==3.0.11,kivy==2.2.1,requests,plyer,pyjnius==0.4.4,kivy-garden.xwebview
+# Use a Cython version compatible with the Python headers used by python-for-android
+# Upgrading Cython avoids the _PyLong_AsByteArray signature mismatch when building
+# against newer Python headers (e.g., Python 3.14).
+requirements = python3,Cython>=3.0.15,kivy==2.2.1,requests,plyer,pyjnius==0.4.4,kivy-garden.xwebview
 
 presplash.filename = assets/presplash.png
 icon.filename = assets/icon.png
