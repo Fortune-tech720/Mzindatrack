@@ -153,6 +153,10 @@ jobs:
           sed -i 's/android.api = 33/android.api = 30/g' buildozer.spec || true
           sed -i 's/android.minapi = 21/android.minapi = 21/g' buildozer.spec || true
 
+          # Ensure libthorvg is disabled to avoid download failures
+          sed -i '/^p4a.libthorvg/d' buildozer.spec || true
+          sed -i '/^\[app\]/a p4a.libthorvg = 0' buildozer.spec || true
+
           # Add WebView gradle dependency if not present
           if ! grep -q "android.gradle_dependencies" buildozer.spec; then
             echo "android.gradle_dependencies = 'androidx.webkit:webkit:1.6.1'" >> buildozer.spec
@@ -165,6 +169,9 @@ jobs:
           echo ""
           echo "📋 p4a.branch setting:"
           grep "^p4a.branch" buildozer.spec || echo "No p4a.branch found"
+          echo ""
+          echo "📋 p4a.libthorvg setting:"
+          grep "^p4a.libthorvg" buildozer.spec || echo "No p4a.libthorvg found"
           echo ""
           echo "📋 Gradle dependencies:"
           grep "^android.gradle_dependencies" buildozer.spec || echo "No gradle dependencies found"
