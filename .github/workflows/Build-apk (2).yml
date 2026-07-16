@@ -1,0 +1,312 @@
+name: Build MzindaTrack APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  ANDROID_HOME: /usr/lib/android-sdk
+  ANDROIDSDK: /usr/lib/android-sdk
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 180
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Cache buildozer
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.buildozer
+          ~/.cache/pip
+        key: buildozer-${{ runner.os }}-py3.11-${{ hashFiles('buildozer.spec') }}-v3
+        restore-keys: |
+          buildozer-${{ runner.os }}-v2-
+
+    - name: Measure disk space
+      run: |
+        set -euo pipefail
+        echo "💾 Disk Space Before Build:"
+        df -h / | awk '{print "  " $0}'
+
+    - name: Install system dependencies
+      run: |
+        set -euo pipefail
+        echo "📦 Updating package manager..."
+        sudo apt-get update -qq
+        
+        echo "📦 Installing build dependencies..."
+        sudo apt-get install -y --no-install-recommends \
+          build-essential \
+          git zip unzip \
+          openjdk-17-jdk \
+          autoconf libtool pkg-config \
+          zlib1g-dev libncurses5-dev libncursesw5-dev \
+          cmake libffi-dev libssl-dev \
+          python3-pip python3-dev \
+          android-sdk \
+          android-sdk-platform-tools \
+          ca-certificates
+        
+        echo "✅ System dependencies installed"
+
+    - name: Verify Python installation
+      run: |
+        set -euo pipefail
+        echo "🐍 Python version:"
+        python --version
+        echo "📍 Python path:"
+        which python
+        echo "📍 pip path:"
+        which pip
+
+    - name: Install and verify buildozer
+      run: |
+        set -euo pipefail
+        echo "🔨 Upgrading pip and setuptools..."
+        pip install --upgrade pip setuptools wheel
+        
+        echo "🔨 Installing build tools with pinned versions..."
+        # Install p4a from develop branch and pin Cython to compatible version
+        pip install "buildozer==1.5.0" "Cython==3.0.11" "setuptools<75" git+https://github.com/kivy/python-for-android@develop
+        
+        echo "✅ Build tools installed"
+        echo "📍 Buildozer path:"
+        which buildozer || echo "❌ buildozer not found in PATH"
+        
+        echo "📍 Buildozer version:"
+        buildozer --version
+        
+        echo "📍 Cython version:"
+        python -c "import Cython; print(Cython.__version__)"
+
+    - name: List repository files (debug)
+      run: |
+        set -euo pipefail
+        echo "📁 Repository root files:"
+        ls -la
+        echo ""
+        if [ -f buildozer.spec ]; then
+          echo "📄 buildozer.spec found"
+          echo "First 30 lines:"
+          head -30 buildozer.spec
+        else
+          echo "⚠️ buildozer.spec NOT found"
+        fi
+
+    - name: Create placeholder assets
+      run: |
+        set -euo pipefail
+        mkdir -p assets data
+        
+        # Create a small valid 1x1 PNG placeholder
+        echo 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII=' | base64 -d > assets/icon.png
+        echo 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII=' | base64 -d > assets/presplash.png
+        
+        echo "✅ Created placeholder images"
+        ls -lh assets/
+
+    - name: Configure buildozer.spec
+      run: |
+        set -euo pipefail
+        echo "🔧 Configuring buildozer.spec..."
+
+        if [ -f buildozer.spec ]; then
+          # Remove any duplicate gradle dependencies lines
+          sed -i '/^android.gradle_dependencies/d' buildozer.spec || true
+
+          # Comment out android.ndk_path
+          sed -i '/android.ndk_path =/c\# android.ndk_path =' buildozer.spec || true
+
+          # Update NDK version to 28c
+          sed -i 's/android.ndk = 23c/android.ndk = 28c/g' buildozer.spec || true
+          sed -i 's/android.ndk = 25c/android.ndk = 28c/g' buildozer.spec || true
+
+          # FIX: Use develop branch instead of non-existent release-2024.1.12
+          sed -i 's/p4a.branch = master/p4a.branch = develop/g' buildozer.spec || true
+          sed -i 's/p4a.branch = release-[0-9.]*\([^a-zA-Z0-9]*\)$/p4a.branch = develop\1/g' buildozer.spec || true
+
+          # FIX: Completely replace the requirements line
+          # Remove any existing requirements line entirely
+          sed -i '/^requirements/d' buildozer.spec || true
+          # Add the correct requirements at the beginning of the [app] section (include Cython 3.0.11 for Python 3.14 compatibility)
+          sed -i '/^\[app\]/a requirements = python3,Cython==3.0.11,kivy==2.2.1,requests,plyer,pyjnius,kivy-garden.xwebview' buildozer.spec || true
+
+          # Fix android.arch to android.archs
+          sed -i 's/android.arch =/android.archs =/g' buildozer.spec || true
+
+          # Remove duplicate or problematic lines
+          sed -i '/^android.sdk =/d' buildozer.spec || true
+          sed -i '/^android.features =/d' buildozer.spec || true
+
+          # Set API levels
+          sed -i 's/android.api = 33/android.api = 30/g' buildozer.spec || true
+          sed -i 's/android.minapi = 21/android.minapi = 21/g' buildozer.spec || true
+
+          # Add WebView gradle dependency if not present
+          if ! grep -q "android.gradle_dependencies" buildozer.spec; then
+            echo "android.gradle_dependencies = 'androidx.webkit:webkit:1.6.1'" >> buildozer.spec
+          fi
+
+          echo "✅ buildozer.spec updated"
+          echo ""
+          echo "📋 Full requirements line:"
+          grep "^requirements" buildozer.spec || echo "ERROR: No requirements line found!"
+          echo ""
+          echo "📋 p4a.branch setting:"
+          grep "^p4a.branch" buildozer.spec || echo "No p4a.branch found"
+          echo ""
+          echo "📋 Gradle dependencies:"
+          grep "^android.gradle_dependencies" buildozer.spec || echo "No gradle dependencies found"
+        else
+          echo "⚠️ buildozer.spec not found; skipping configuration"
+        fi
+
+    - name: Build APK
+      id: build
+      timeout-minutes: 150
+      run: |
+        set -euo pipefail
+        BUILD_START=$(date +%s)
+        echo "🚀 Starting APK build..."
+        echo "⏰ Build started at: $(date)"
+        echo ""
+        
+        # Verify buildozer is available before building
+        which buildozer || { echo "❌ buildozer not found!"; exit 127; }
+        
+        # Run buildozer and capture output. If buildozer fails, display logs and exit with error
+        if buildozer -v android debug 2>&1 | tee build.log; then
+          BUILD_SUCCESS=true
+        else
+          BUILD_SUCCESS=false
+          echo ""
+          echo "❌ Buildozer failed. Last 200 lines of output:"
+          tail -n 200 build.log || true
+        fi
+        
+        BUILD_END=$(date +%s)
+        BUILD_TIME=$((BUILD_END - BUILD_START))
+        BUILD_MINUTES=$((BUILD_TIME / 60))
+        BUILD_SECONDS=$((BUILD_TIME % 60))
+        
+        echo ""
+        echo "⏱️ Build completed in: ${BUILD_MINUTES}m ${BUILD_SECONDS}s"
+        echo ""
+        echo "🔍 Checking for APK..."
+        
+        if [ "$BUILD_SUCCESS" = "true" ] && ls bin/*.apk 2>/dev/null; then
+          echo "✅ APK build successful!"
+          APK_SIZE=$(du -h bin/*.apk | awk '{print $1}' | tail -1)
+          echo "📦 APK Size: $APK_SIZE"
+          echo "apk_exists=true" >> $GITHUB_OUTPUT
+          echo "build_time=${BUILD_MINUTES}m ${BUILD_SECONDS}s" >> $GITHUB_OUTPUT
+          echo "apk_size=$APK_SIZE" >> $GITHUB_OUTPUT
+          ls -lh bin/*.apk
+        else
+          echo "❌ No APK found in bin/"
+          echo "apk_exists=false" >> $GITHUB_OUTPUT
+          echo "build_time=${BUILD_MINUTES}m ${BUILD_SECONDS}s" >> $GITHUB_OUTPUT
+          exit 1
+        fi
+
+    - name: Upload APK artifact
+      if: steps.build.outputs.apk_exists == 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: mzindatrack-apk
+        path: bin/*.apk
+        retention-days: 30
+        if-no-files-found: error
+
+    - name: Upload build logs
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-logs-${{ github.run_number }}
+        path: |
+          build.log
+          .buildozer/logs/*.log
+        retention-days: 7
+        if-no-files-found: warn
+
+    - name: Performance metrics
+      if: always()
+      run: |
+        set -euo pipefail
+        echo "📊 Build Performance Metrics:"
+        echo ""
+        echo "Build Time: ${{ steps.build.outputs.build_time }}"
+        if [ "${{ steps.build.outputs.apk_exists }}" = "true" ]; then
+          echo "APK Size: ${{ steps.build.outputs.apk_size }}"
+        fi
+        echo ""
+        echo "💾 Disk Space After Build:"
+        df -h / | awk '{print "  " $0}'
+
+    - name: Generate build summary
+      if: always()
+      run: |
+        set -euo pipefail
+        {
+          echo "# 🔨 Build Summary"
+          echo ""
+          echo "## Status"
+          echo "- **Workflow Status**: ${{ job.status }}"
+          echo "- **Build Outcome**: ${{ steps.build.outcome }}"
+          echo "- **APK Generated**: ${{ steps.build.outputs.apk_exists == 'true' && '✅ Yes' || '❌ No' }}"
+          echo ""
+          echo "## Build Information"
+          echo "- **Run Number**: ${{ github.run_number }}"
+          echo "- **Branch**: ${{ github.ref_name }}"
+          echo "- **Commit**: `${{ github.sha }}`"
+          echo "- **Build Time**: ${{ steps.build.outputs.build_time }}"
+          echo "- **Runner**: ${{ runner.os }} (${{ runner.arch }})"
+          echo ""
+          if [ "${{ steps.build.outputs.apk_exists }}" = "true" ]; then
+            echo "## 🎉 APK Artifact"
+            echo "- **Name**: mzindatrack-apk"
+            echo "- **Size**: ${{ steps.build.outputs.apk_size }}"
+            echo "- **Available**: ✅ Available in workflow artifacts"
+            echo "- **Retention**: 30 days"
+          else
+            echo "## ❌ Build Failed"
+            echo "Check the **build-logs-${{ github.run_number }}** artifact for details."
+            echo ""
+            echo "### Troubleshooting Tips:"
+            echo "1. Check buildozer logs in artifacts"
+            echo "2. Verify buildozer.spec is properly configured"
+            echo "3. Ensure all dependencies are available"
+            echo "4. Check for disk space issues"
+          fi
+        } >> $GITHUB_STEP_SUMMARY
+
+    - name: Cleanup on failure
+      if: failure()
+      run: |
+        echo "⚠️ Build failed. Diagnostic information:"
+        echo ""
+        echo "📁 Current directory structure:"
+        find . -maxdepth 2 -type d | head -20
+        echo ""
+        echo "🔍 buildozer configuration:"
+        [ -f buildozer.spec ] && head -50 buildozer.spec || echo "buildozer.spec not found"
+        echo ""
+        echo "💾 Disk space status:"
+        df -h /
+        echo ""
+        echo "🔧 Build environment:"
+        echo "Java version: $(java -version 2>&1 | head -1)"
+        echo "Android SDK: $(ls -d /usr/lib/android-sdk 2>/dev/null || echo 'Not found')"
+        echo "Python version: $(python --version)"
+        echo "Buildozer version: $(buildozer --version 2>&1 || echo 'Not found')"
