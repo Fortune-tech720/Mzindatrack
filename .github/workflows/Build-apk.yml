@@ -179,6 +179,8 @@ jobs:
     - name: Build APK
       id: build
       timeout-minutes: 150
+      env:
+        P4A_LIBTHORVG: 0
       run: |
         set -euo pipefail
         BUILD_START=$(date +%s)
