@@ -29,9 +29,9 @@ jobs:
         path: |
           ~/.buildozer
           ~/.cache/pip
-        key: buildozer-${{ runner.os }}-py3.11-${{ hashFiles('buildozer.spec') }}-v3
+        key: buildozer-${{ runner.os }}-py3.11-${{ hashFiles('buildozer.spec') }}-v4
         restore-keys: |
-          buildozer-${{ runner.os }}-v2-
+          buildozer-${{ runner.os }}-v3-
 
     - name: Measure disk space
       run: |
@@ -154,6 +154,14 @@ jobs:
         else
           echo "⚠️ buildozer.spec not found; skipping configuration"
         fi
+
+    - name: Clear buildozer cache for libthorvg
+      run: |
+        set -euo pipefail
+        echo "🧹 Clearing buildozer cache to force clean build..."
+        rm -rf ~/.buildozer/android/platform/build-* || true
+        rm -rf ~/.buildozer/android/platform/python-for-android/.buildozer || true
+        echo "✅ Cache cleared"
 
     - name: Build APK
       id: build
