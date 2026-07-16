@@ -8,6 +8,8 @@ on:
 env:
   ANDROID_HOME: /usr/lib/android-sdk
   ANDROIDSDK: /usr/lib/android-sdk
+  PIP_RETRIES: 5
+  PIP_DEFAULT_TIMEOUT: 60
 
 jobs:
   build:
@@ -79,7 +81,18 @@ jobs:
         
         echo "🔨 Installing build tools with pinned versions..."
         # Install p4a from develop branch and use Cython 3.0.15+ for Python 3.14 compatibility
-        pip install "buildozer==1.5.0" "Cython>=3.0.15" "setuptools<75" git+https://github.com/kivy/python-for-android@develop
+        for attempt in {1..3}; do
+          echo "Attempt $attempt to install buildozer dependencies..."
+          if pip install "buildozer==1.5.0" "Cython>=3.0.15" "setuptools<75" git+https://github.com/kivy/python-for-android@develop; then
+            break
+          elif [ $attempt -lt 3 ]; then
+            echo "⚠️ Attempt $attempt failed, retrying in 10 seconds..."
+            sleep 10
+          else
+            echo "❌ Failed to install dependencies after 3 attempts"
+            exit 1
+          fi
+        done
         
         echo "✅ Build tools installed"
         echo "📍 Buildozer path:"
@@ -191,15 +204,26 @@ jobs:
         # Verify buildozer is available before building
         which buildozer || { echo "❌ buildozer not found!"; exit 127; }
         
-        # Run buildozer and capture output. If buildozer fails, display logs and exit with error
-        if buildozer -v android debug 2>&1 | tee build.log; then
-          BUILD_SUCCESS=true
-        else
-          BUILD_SUCCESS=false
-          echo ""
-          echo "❌ Buildozer failed. Last 200 lines of output:"
-          tail -n 200 build.log || true
-        fi
+        # Run buildozer with retry logic for network issues
+        BUILD_SUCCESS=false
+        for attempt in {1..3}; do
+          echo "Build attempt $attempt of 3..."
+          if buildozer -v android debug 2>&1 | tee build.log; then
+            BUILD_SUCCESS=true
+            echo "✅ Build succeeded on attempt $attempt"
+            break
+          else
+            if [ $attempt -lt 3 ]; then
+              echo ""
+              echo "⚠️ Build attempt $attempt failed, retrying in 15 seconds..."
+              sleep 15
+            else
+              echo ""
+              echo "❌ Build failed after 3 attempts. Last 200 lines of output:"
+              tail -n 200 build.log || true
+            fi
+          fi
+        done
         
         BUILD_END=$(date +%s)
         BUILD_TIME=$((BUILD_END - BUILD_START))
