@@ -29,9 +29,9 @@ jobs:
         path: |
           ~/.buildozer
           ~/.cache/pip
-        key: buildozer-${{ runner.os }}-py3.11-${{ hashFiles('buildozer.spec') }}-v4
+        key: buildozer-${{ runner.os }}-py3.11-${{ hashFiles('buildozer.spec') }}-v5
         restore-keys: |
-          buildozer-${{ runner.os }}-v3-
+          buildozer-${{ runner.os }}-v4-
 
     - name: Measure disk space
       run: |
@@ -122,11 +122,14 @@ jobs:
         echo "🔧 Configuring buildozer.spec..."
 
         if [ -f buildozer.spec ]; then
-          # First, remove ALL p4a.libthorvg lines regardless of value
-          sed -i '/^p4a.libthorvg/d' buildozer.spec
-          
-          # Add the correct p4a.libthorvg = 0 setting
-          echo "p4a.libthorvg = 0" >> buildozer.spec
+          # Verify p4a.libthorvg is set to 0
+          if grep -q "^p4a.libthorvg" buildozer.spec; then
+            echo "Found p4a.libthorvg, ensuring it is set to 0..."
+            sed -i 's/^p4a.libthorvg.*/p4a.libthorvg = 0/' buildozer.spec
+          else
+            echo "Adding p4a.libthorvg = 0..."
+            echo "p4a.libthorvg = 0" >> buildozer.spec
+          fi
           
           # Ensure p4a.branch is set correctly
           if grep -q "^p4a.branch" buildozer.spec; then
@@ -161,7 +164,14 @@ jobs:
         echo "🧹 Clearing buildozer cache to force clean build..."
         rm -rf ~/.buildozer/android/platform/build-* || true
         rm -rf ~/.buildozer/android/platform/python-for-android/.buildozer || true
+        rm -rf ~/.buildozer/android/platform/python-for-android/dist || true
+        rm -rf ~/.buildozer/android/platform/python-for-android/build || true
+        rm -rf ~/.cache/pip/http* || true
         echo "✅ Cache cleared"
+        
+        echo "🧹 Clearing intermediate build artifacts..."
+        rm -rf .buildozer/android/platform/build-* || true
+        echo "✅ Intermediate artifacts cleared"
 
     - name: Build APK
       id: build
