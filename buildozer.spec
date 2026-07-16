@@ -12,7 +12,7 @@ version = 1.0.0
 # Use a Cython version compatible with the Python headers used by python-for-android
 # Upgrading Cython avoids the _PyLong_AsByteArray signature mismatch when building
 # against newer Python headers (e.g., Python 3.14).
-requirements = python3,Cython>=3.0.15,kivy==2.2.1,requests,plyer,pyjnius==0.4.4,kivy-garden.xwebview
+requirements = python3,Cython>=3.0.15,kivy==2.2.1,requests,plyer,pyjnius==0.4.4
 
 presplash.filename = assets/presplash.png
 icon.filename = assets/icon.png
@@ -36,6 +36,10 @@ android.apptheme = @style/Theme.AppCompat
 android.archs = arm64-v8a
 android.copy_libs = 1
 android.use_androidx = True
+android.neon = 0
+
+# Disable libthorvg to avoid download failures
+p4a.libthorvg = 0
 
 # WebView support
 android.gradle_dependencies = 'androidx.webkit:webkit:1.6.1'
