@@ -77,8 +77,8 @@ jobs:
         pip install --upgrade pip setuptools wheel
         
         echo "🔨 Installing build tools with pinned versions..."
-        # Install p4a from develop branch and pin Cython to compatible version
-        pip install "buildozer==1.5.0" "Cython==3.0.11" "setuptools<75" git+https://github.com/kivy/python-for-android@develop
+        # Install p4a from develop branch and use Cython 3.0.15+ for Python 3.14 compatibility
+        pip install "buildozer==1.5.0" "Cython>=3.0.15" "setuptools<75" git+https://github.com/kivy/python-for-android@develop
         
         echo "✅ Build tools installed"
         echo "📍 Buildozer path:"
@@ -139,8 +139,8 @@ jobs:
           # FIX: Completely replace the requirements line
           # Remove any existing requirements line entirely
           sed -i '/^requirements/d' buildozer.spec || true
-          # Add the correct requirements at the beginning of the [app] section (include Cython 3.0.11 for Python 3.14 compatibility)
-          sed -i '/^\[app\]/a requirements = python3,Cython==3.0.11,kivy==2.2.1,requests,plyer,pyjnius,kivy-garden.xwebview' buildozer.spec || true
+          # Add the correct requirements at the beginning of the [app] section (use Cython 3.0.15+ for Python 3.14 compatibility)
+          sed -i '/^\[app\]/a requirements = python3,Cython>=3.0.15,kivy==2.2.1,requests,plyer,pyjnius==0.4.4,kivy-garden.xwebview' buildozer.spec || true
 
           # Fix android.arch to android.archs
           sed -i 's/android.arch =/android.archs =/g' buildozer.spec || true
