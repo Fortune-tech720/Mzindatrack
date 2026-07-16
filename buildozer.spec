@@ -12,7 +12,7 @@ version = 1.0.0
 # Use a Cython version compatible with the Python headers used by python-for-android
 # Upgrading Cython avoids the _PyLong_AsByteArray signature mismatch when building
 # against newer Python headers (e.g., Python 3.14).
-requirements = python3,Cython>=3.0.15,kivy==2.2.1,requests,plyer,pyjnius==0.4.4
+requirements = python3,Cython>=3.0.15,kivy==2.2.1,requests,plyer,pyjnius==1.4.5
 
 presplash.filename = assets/presplash.png
 icon.filename = assets/icon.png
