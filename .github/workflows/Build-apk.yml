@@ -122,53 +122,35 @@ jobs:
         echo "🔧 Configuring buildozer.spec..."
 
         if [ -f buildozer.spec ]; then
-          # Create a temporary file for the cleaned spec
-          TEMP_SPEC=$(mktemp)
+          # First, remove ALL p4a.libthorvg lines regardless of value
+          sed -i '/^p4a.libthorvg/d' buildozer.spec
           
-          # Remove problematic or duplicate lines
-          grep -v "^android.gradle_dependencies" buildozer.spec | \
-          grep -v "^p4a.libthorvg" | \
-          grep -v "^p4a.branch = master" | \
-          grep -v "^p4a.branch = release-" | \
-          grep -v "^requirements" > "$TEMP_SPEC"
+          # Add the correct p4a.libthorvg = 0 setting
+          echo "p4a.libthorvg = 0" >> buildozer.spec
           
-          # Now add clean versions of these settings
-          # Find the [app] section and insert after it
-          if grep -q "^\[app\]" "$TEMP_SPEC"; then
-            # Create final spec with proper settings inserted after [app]
-            awk '/^\[app\]/ {print; print "requirements = python3,Cython>=3.0.15,kivy==2.2.1,requests,plyer,pyjnius==0.4.4"; next} 1' "$TEMP_SPEC" > buildozer.spec.tmp
-            mv buildozer.spec.tmp "$TEMP_SPEC"
-          fi
-          
-          # Replace the original file
-          mv "$TEMP_SPEC" buildozer.spec
-          
-          # Ensure critical settings are present
-          if ! grep -q "^p4a.branch" buildozer.spec; then
+          # Ensure p4a.branch is set correctly
+          if grep -q "^p4a.branch" buildozer.spec; then
+            sed -i 's/^p4a.branch.*/p4a.branch = develop/' buildozer.spec
+          else
             echo "p4a.branch = develop" >> buildozer.spec
           fi
           
-          if ! grep -q "^p4a.libthorvg" buildozer.spec; then
-            echo "p4a.libthorvg = 0" >> buildozer.spec
-          fi
-          
+          # Ensure android.gradle_dependencies is set
           if ! grep -q "^android.gradle_dependencies" buildozer.spec; then
             echo "android.gradle_dependencies = androidx.webkit:webkit:1.6.1" >> buildozer.spec
           fi
           
           echo "✅ buildozer.spec cleaned and configured"
           echo ""
-          echo "📋 Full requirements line:"
-          grep "^requirements" buildozer.spec || echo "ERROR: No requirements line found!"
-          echo ""
-          echo "📋 p4a.branch setting:"
-          grep "^p4a.branch" buildozer.spec || echo "No p4a.branch found"
-          echo ""
-          echo "📋 p4a.libthorvg setting:"
-          grep "^p4a.libthorvg" buildozer.spec || echo "No p4a.libthorvg found"
-          echo ""
-          echo "📋 Gradle dependencies:"
-          grep "^android.gradle_dependencies" buildozer.spec || echo "No gradle dependencies found"
+          echo "📋 Critical settings verification:"
+          echo "Requirements:"
+          grep "^requirements" buildozer.spec || echo "  ⚠️ No requirements line found"
+          echo "P4A Branch:"
+          grep "^p4a.branch" buildozer.spec || echo "  ⚠️ No p4a.branch found"
+          echo "P4A LibThorVG (should be 0):"
+          grep "^p4a.libthorvg" buildozer.spec || echo "  ⚠️ No p4a.libthorvg found"
+          echo "Gradle Dependencies:"
+          grep "^android.gradle_dependencies" buildozer.spec || echo "  ⚠️ No gradle dependencies found"
         else
           echo "⚠️ buildozer.spec not found; skipping configuration"
         fi
