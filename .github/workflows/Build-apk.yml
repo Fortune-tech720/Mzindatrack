@@ -122,47 +122,41 @@ jobs:
         echo "🔧 Configuring buildozer.spec..."
 
         if [ -f buildozer.spec ]; then
-          # Remove any duplicate gradle dependencies lines
-          sed -i '/^android.gradle_dependencies/d' buildozer.spec || true
-
-          # Comment out android.ndk_path
-          sed -i '/android.ndk_path =/c\# android.ndk_path =' buildozer.spec || true
-
-          # Update NDK version to 28c
-          sed -i 's/android.ndk = 23c/android.ndk = 28c/g' buildozer.spec || true
-          sed -i 's/android.ndk = 25c/android.ndk = 28c/g' buildozer.spec || true
-
-          # FIX: Use develop branch instead of non-existent release-2024.1.12
-          sed -i 's/p4a.branch = master/p4a.branch = develop/g' buildozer.spec || true
-          sed -i 's/p4a.branch = release-[0-9.]*\([^a-zA-Z0-9]*\)$/p4a.branch = develop\1/g' buildozer.spec || true
-
-          # FIX: Completely replace the requirements line
-          # Remove any existing requirements line entirely
-          sed -i '/^requirements/d' buildozer.spec || true
-          # Add the correct requirements at the beginning of the [app] section (use Cython 3.0.15+ for Python 3.14 compatibility)
-          sed -i '/^\[app\]/a requirements = python3,Cython>=3.0.15,kivy==2.2.1,requests,plyer,pyjnius==0.4.4,kivy-garden.xwebview' buildozer.spec || true
-
-          # Fix android.arch to android.archs
-          sed -i 's/android.arch =/android.archs =/g' buildozer.spec || true
-
-          # Remove duplicate or problematic lines
-          sed -i '/^android.sdk =/d' buildozer.spec || true
-          sed -i '/^android.features =/d' buildozer.spec || true
-
-          # Set API levels
-          sed -i 's/android.api = 33/android.api = 30/g' buildozer.spec || true
-          sed -i 's/android.minapi = 21/android.minapi = 21/g' buildozer.spec || true
-
-          # Ensure libthorvg is disabled to avoid download failures
-          sed -i '/^p4a.libthorvg/d' buildozer.spec || true
-          sed -i '/^\[app\]/a p4a.libthorvg = 0' buildozer.spec || true
-
-          # Add WebView gradle dependency if not present
-          if ! grep -q "android.gradle_dependencies" buildozer.spec; then
-            echo "android.gradle_dependencies = 'androidx.webkit:webkit:1.6.1'" >> buildozer.spec
+          # Create a temporary file for the cleaned spec
+          TEMP_SPEC=$(mktemp)
+          
+          # Remove problematic or duplicate lines
+          grep -v "^android.gradle_dependencies" buildozer.spec | \
+          grep -v "^p4a.libthorvg" | \
+          grep -v "^p4a.branch = master" | \
+          grep -v "^p4a.branch = release-" | \
+          grep -v "^requirements" > "$TEMP_SPEC"
+          
+          # Now add clean versions of these settings
+          # Find the [app] section and insert after it
+          if grep -q "^\[app\]" "$TEMP_SPEC"; then
+            # Create final spec with proper settings inserted after [app]
+            awk '/^\[app\]/ {print; print "requirements = python3,Cython>=3.0.15,kivy==2.2.1,requests,plyer,pyjnius==0.4.4"; next} 1' "$TEMP_SPEC" > buildozer.spec.tmp
+            mv buildozer.spec.tmp "$TEMP_SPEC"
           fi
-
-          echo "✅ buildozer.spec updated"
+          
+          # Replace the original file
+          mv "$TEMP_SPEC" buildozer.spec
+          
+          # Ensure critical settings are present
+          if ! grep -q "^p4a.branch" buildozer.spec; then
+            echo "p4a.branch = develop" >> buildozer.spec
+          fi
+          
+          if ! grep -q "^p4a.libthorvg" buildozer.spec; then
+            echo "p4a.libthorvg = 0" >> buildozer.spec
+          fi
+          
+          if ! grep -q "^android.gradle_dependencies" buildozer.spec; then
+            echo "android.gradle_dependencies = androidx.webkit:webkit:1.6.1" >> buildozer.spec
+          fi
+          
+          echo "✅ buildozer.spec cleaned and configured"
           echo ""
           echo "📋 Full requirements line:"
           grep "^requirements" buildozer.spec || echo "ERROR: No requirements line found!"
